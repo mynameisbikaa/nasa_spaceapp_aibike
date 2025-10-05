@@ -10,7 +10,6 @@
     html, body { margin:0; padding:0; overflow:hidden; background:#101018; }
     canvas { display:block; }
     
-    /* VIDEO OVERLAY STYLES - ADD THIS */
     #intro-overlay {
       position: fixed;
       top: 0;
@@ -75,7 +74,6 @@
 </head>
 <body>
 
-<!-- VIDEO INTRO OVERLAY - ADD THIS SECTION -->
 <div id="intro-overlay">
   <div class="video-container">
     <video id="intro-video" autoplay muted playsinline>
@@ -88,7 +86,6 @@
 </div>
 
 <script>
-// VIDEO OVERLAY SCRIPT - ADD THIS BEFORE YOUR GAME SCRIPT
 (function() {
   const overlay = document.getElementById('intro-overlay');
   const video = document.getElementById('intro-video');
@@ -139,7 +136,6 @@
 </script>
 
 <script>
-// YOUR EXISTING GAME CODE STAYS EXACTLY THE SAME
 const BACKGROUND_IMAGE_URL = "snapshot-2020-08-03T00_00_00Z.jpg";
 
 const INITIAL_SPAWN_INTERVAL = 1200;
@@ -700,3 +696,4 @@ function drawGameOverScreen() {
 </html>
 
 function formatTime
+
