@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Extinguish the Flames - Enhanced</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <link href="https://fonts.googleapis.com/css?family=Montserrat:700|Roboto:400&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; overflow:hidden; background:#101018; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+
+<script>
+const BACKGROUND_IMAGE_URL = "https://wvs.earthdata.nasa.gov/api/v1/snapshot?REQUEST=GetSnapshot&TIME=2020-08-03T00:00:00Z&BBOX=3.375,-13.5,73.6875,156.9375&CRS=EPSG:4326&LAYERS=BlueMarble_NextGeneration,MODIS_Terra_Thermal_Anomalies_Day,MODIS_Terra_Thermal_Anomalies_Night,MODIS_Aqua_Thermal_Anomalies_Day,MODIS_Aqua_Thermal_Anomalies_Night,VIIRS_NOAA20_Thermal_Anomalies_375m_Day,VIIRS_NOAA20_Thermal_Anomalies_375m_Night,Coastlines_15m,Reference_Features_15m&WRAP=x,none,none,none,none,none,none,x,x&FORMAT=image/jpeg&WIDTH=3878&HEIGHT=1600&colormaps=,MODIS_All_Thermal_Anomalies,MODIS_All_Thermal_Anomalies,MODIS_All_Thermal_Anomalies,MODIS_All_Thermal_Anomalies,VIIRS_All_Thermal_Anomalies,VIIRS_All_Thermal_Anomalies,,&ts=1759612373189";
+
+const INITIAL_SPAWN_INTERVAL = 1800;
+const MIN_SPAWN_INTERVAL = 500;
+const SPAWN_ACCELERATION = 0.975;
+const INITIAL_FIRE_RADIUS = 48;
+const MIN_FIRE_RADIUS = 24;
+const FIRE_PULSE_SPEED = 1.1;
+const FIRE_FADE_DURATION = 400;
+const MAX_ECOSYSTEM_HEALTH = 100;
+const MAX_AIR_QUALITY = 100;
+const HEALTH_LOSS_PER_FIRE_PER_SEC = 4;
+const AIR_QUALITY_LOSS_PER_FIRE_PER_SEC = 2.8;
+const HEALTH_RESTORE_ON_EXTINGUISH = 3.5;
+const AIR_QUALITY_RESTORE_ON_EXTINGUISH = 2.2;
+const STATUS_BAR_WIDTH_FRAC = 0.45;
+const STATUS_BAR_THICKNESS_FRAC = 0.025;
+const STATUS_BAR_CORNER_RADIUS = 20;
+const STATUS_BAR_SPACING_FRAC = 0.025;
+
+const COLOR_BG_OVERLAY = [16, 16, 32, 60];
+const COLOR_HEALTH = [54, 206, 155];
+const COLOR_HEALTH_CRIT = [246, 66, 82];
+const COLOR_AIR = [90, 145, 245];
+const COLOR_AIR_CRIT = [150, 86, 221];
+const COLOR_FIRE_CORE = [255, 204, 90];
+const COLOR_FIRE_GLOW = [250, 90, 24];
+const COLOR_UI_TEXT = [245, 245, 250];
+const COLOR_UI_SHADOW = [0, 0, 0, 130];
+const COLOR_GAME_OVER_BG = [18, 22, 38, 215];
+const COLOR_BTN = [60, 190, 240];
+const COLOR_BTN_TEXT = [255, 255, 255];
+
+const FONT_TITLE = 'Montserrat';
+const FONT_BODY = 'Roboto';
+
+const FIRE_FACTS = [
+  "NASA's Terra satellite was launched in 1999 to monitor Earth's climate and environmental changes.",
+  "Terra's MODIS instrument scans the entire Earth's surface every 1 to 2 days, detecting active fires.",
+  "Terra can detect thermal anomalies and fires as small as 1,000 square meters from space.",
+  "The MODIS sensor on Terra observes fires in 36 spectral bands, providing detailed fire information.",
+  "Terra satellite data helps predict fire behavior and assess burn severity across the globe.",
+  "Terra's orbit allows it to cross the equator in the morning, providing crucial fire detection data.",
+  "MODIS on Terra has detected millions of fires worldwide, helping track global fire patterns.",
+  "Terra satellite measures fire radiative power, helping scientists estimate emissions from wildfires."
+];
+
+const ROULETTE_IMAGES = [
+  "https://via.placeholder.com/100/FF6B35/FFFFFF?text=Fire+1",
+  "https://via.placeholder.com/100/F7931E/FFFFFF?text=Fire+2",
+  "https://via.placeholder.com/100/C1292E/FFFFFF?text=Fire+3",
+  "https://via.placeholder.com/100/FBB03B/FFFFFF?text=Fire+4",
+  "https://via.placeholder.com/100/ED1C24/FFFFFF?text=Fire+5",
+  "https://via.placeholder.com/100/FF8C42/FFFFFF?text=Fire+6"
+];
+
+let bgImg, nasaLogo, spaceAppsLogo;
+let fires = [], fireFadeParticles = [];
+let spawnInterval = INITIAL_SPAWN_INTERVAL;
+let lastSpawnTime = 0;
+let ecosystemHealth, airQuality, score, timeStarted;
+let gameState = "start";
+let restartQueued = false;
+let mouseClickedThisFrame = false;
+let resizedThisFrame = false;
+
+let rouletteImages = [];
+let rouletteAngle = 0;
+let rouletteSpeed = 2;
+
+let facts = [];
+let currentFactPopup = null;
+let factPopupTime = 0;
+let lastFactScore = 0;
+
+function preload() {
+  try {
+    bgImg = loadImage(BACKGROUND_IMAGE_URL, ()=>{}, ()=>{ bgImg = null; });
+  } catch(e) {
+    bgImg = null;
+  }
+  nasaLogo = loadImage('', ()=>{}, ()=>{ nasaLogo = null; });
+  spaceAppsLogo = loadImage('', ()=>{}, ()=>{ spaceAppsLogo = null; });
+  for (let url of ROULETTE_IMAGES) {
+    rouletteImages.push(loadImage(url, ()=>{}, ()=>{}));
+  }
+}
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  pixelDensity(1.0 * window.devicePixelRatio);
+  initGame();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  resizedThisFrame = true;
+}
+
+function initGame() {
+  fires = [];
+  fireFadeParticles = [];
+  ecosystemHealth = MAX_ECOSYSTEM_HEALTH;
+  airQuality = MAX_AIR_QUALITY;
+  score = 0;
+  spawnInterval = INITIAL_SPAWN_INTERVAL;
+  lastSpawnTime = millis();
+  timeStarted = millis();
+  restartQueued = false;
+  resizedThisFrame = false;
+  rouletteAngle = 0;
+  facts = [];
+  currentFactPopup = null;
+  lastFactTime = millis();
+}
+
+function draw() {
+  mouseClickedThisFrame = false;
+  
+  background(0);
+  if (bgImg) {
+    let bgAspect = bgImg.width / bgImg.height;
+    let canvAspect = width / height;
+    let drawW, drawH;
+    if (bgAspect > canvAspect) {
+      drawH = height;
+      drawW = drawH * bgAspect;
+    } else {
+      drawW = width;
+      drawH = drawW / bgAspect;
+    }
+    imageMode(CORNER);
+    image(bgImg, -(drawW-width)/2, -(drawH-height)/2, drawW, drawH);
+  } else {
+    noStroke();
+    fill(12,16,24);
+    rect(0,0,width,height);
+  }
+  
+  noStroke();
+  fill(...COLOR_BG_OVERLAY);
+  rect(0,0,width,height);
+
+  if (gameState === "start") {
+    drawStartScreen();
+  } else if (gameState === "playing") {
+    updateRoulette();
+    spawnFireIfDue();
+    updateEcosystem();
+    updateFireFadeFX();
+    drawRoulette();
+    drawStatusBars();
+    drawScoreHUD();
+    drawCredits();
+    updateFactPopup();
+    drawFires(true);
+    drawFireFadeFX();
+    drawFactPopup();
+  } else {
+    updateFireFadeFX();
+    drawFireFadeFX();
+    fill(0, 0, 0, 180);
+    noStroke();
+    rect(0, 0, width, height);
+    drawGameOverScreen();
+  }
+}
+
+function drawStartScreen() {
+  push();
+  
+  textFont(FONT_TITLE);
+  textSize(min(width * 0.08, 72));
+  textAlign(CENTER, CENTER);
+  fill(255, 240, 100);
+  text("EXTINGUISH THE FLAMES", width/2, height * 0.25);
+  
+  textFont(FONT_BODY);
+  textSize(min(width * 0.025, 24));
+  fill(200, 200, 220);
+  text("Help protect our planet from wildfires", width/2, height * 0.35);
+  
+  let logoY = height * 0.45;
+  let logoSize = min(width * 0.08, 80);
+  
+  if (nasaLogo) {
+    imageMode(CENTER);
+    image(nasaLogo, width/2 - logoSize * 1.2, logoY + logoSize/2, logoSize, logoSize);
+  } else {
+    noFill();
+    stroke(100, 120, 150);
+    strokeWeight(2);
+    rectMode(CENTER);
+    rect(width/2 - logoSize * 1.2, logoY + logoSize/2, logoSize, logoSize, 5);
+  }
+  
+  if (spaceAppsLogo) {
+    imageMode(CENTER);
+    image(spaceAppsLogo, width/2 + logoSize * 1.2, logoY + logoSize/2, logoSize * 2, logoSize * 1.3);
+  } else {
+    noFill();
+    stroke(100, 120, 150);
+    strokeWeight(2);
+    rectMode(CENTER);
+    rect(width/2 + logoSize * 1.2, logoY + logoSize/2, logoSize * 2, logoSize * 1.3, 5);
+  }
+  
+  rectMode(CORNER);
+  
+  let btnW = min(width * 0.3, 280);
+  let btnH = min(height * 0.08, 60);
+  let btnX = width/2 - btnW/2;
+  let btnY = height * 0.65;
+  
+  let hovering = mouseX >= btnX && mouseX <= btnX + btnW && 
+                 mouseY >= btnY && mouseY <= btnY + btnH;
+  
+  fill(hovering ? 70 : 60, hovering ? 200 : 190, hovering ? 250 : 240, 220);
+  stroke(80, 139, 175, 165);
+  strokeWeight(3);
+  rect(btnX, btnY, btnW, btnH, 16);
+  
+  noStroke();
+  fill(255);
+  textFont(FONT_TITLE);
+  textSize(min(width * 0.03, 28));
+  text("START GAME", width/2, btnY + btnH/2 + 2);
+  
+  textFont(FONT_BODY);
+  textSize(min(width * 0.018, 16));
+  fill(150, 150, 170);
+  text("Made with ♥ by Aibike Moldobaeva", width/2, height * 0.85);
+  
+  textSize(min(width * 0.015, 14));
+  fill(130, 140, 160);
+  text("Click on fires to extinguish them before ecosystem health runs out!", width/2, height * 0.92);
+  
+  pop();
+}
+
+function updateRoulette() {
+  rouletteAngle += rouletteSpeed;
+  if (rouletteAngle >= 360) rouletteAngle -= 360;
+}
+
+function drawRoulette() {
+  if (rouletteImages.length === 0) return;
+  
+  push();
+  let size = min(width, height) * 0.12;
+  let x = width - size * 0.7;
+  let y = height - size * 0.7;
+  
+  translate(x, y);
+  rotate(radians(rouletteAngle));
+  
+  imageMode(CENTER);
+  for (let i = 0; i < rouletteImages.length; i++) {
+    let angle = (i / rouletteImages.length) * TWO_PI;
+    let radius = size * 0.35;
+    let imgX = cos(angle) * radius;
+    let imgY = sin(angle) * radius;
+    let imgSize = size * 0.25;
+    
+    if (rouletteImages[i]) {
+      tint(255, 200);
+      image(rouletteImages[i], imgX, imgY, imgSize, imgSize);
+      noTint();
+    }
+  }
+  
+  pop();
+  
+  textFont(FONT_BODY);
+  textSize(10);
+  textAlign(CENTER);
+  fill(150, 150, 170);
+  noStroke();
+  text("NASA Fire Data", x, y + size * 0.6);
+}
+
+function updateFactPopup() {
+  // Show fact every 7 seconds
+  let currentTime = millis();
+  if (currentTime - lastFactTime > 7000) {
+    lastFactTime = currentTime;
+    let randomFact = random(FIRE_FACTS);
+    currentFactPopup = randomFact;
+    factPopupTime = currentTime;
+  }
+  
+  // Hide fact after 5 seconds
+  if (currentFactPopup && millis() - factPopupTime > 5000) {
+    currentFactPopup = null;
+  }
+}
+
+function drawFactPopup() {
+  if (!currentFactPopup) return;
+  
+  push();
+  
+  // Fade in/out timing
+  let elapsed = millis() - factPopupTime;
+  let alpha = 255;
+  if (elapsed < 300) {
+    alpha = map(elapsed, 0, 300, 0, 255);
+  } else if (elapsed > 4700) {
+    alpha = map(elapsed, 4700, 5000, 255, 0);
+  }
+  
+  // Fact panel - smaller and more transparent
+  let w = min(width * 0.5, 500);
+  let h = 160;
+  let x = width/2 - w/2;
+  let y = height * 0.12;
+  
+  fill(30, 50, 80, alpha * 0.75);
+  stroke(100, 150, 200, alpha * 0.5);
+  strokeWeight(2);
+  rect(x, y, w, h, 12);
+  
+  noStroke();
+  fill(100, 200, 255, alpha * 0.9);
+  textFont(FONT_TITLE);
+  textSize(14);
+  textAlign(CENTER, TOP);
+  text("🛰️ TERRA SATELLITE FACT", width/2, y + 18);
+  
+  fill(255, 255, 255, alpha * 0.95);
+  textFont(FONT_BODY);
+  textSize(14);
+  textAlign(LEFT, TOP);
+  textLeading(22);
+  
+  let textX = x + 30;
+  let textY = y + 50;
+  let textW = w - 60;
+  
+  text(currentFactPopup, textX, textY, textW);
+  
+  pop();
+}
+
+function drawCredits() {
+  push();
+  textFont(FONT_BODY);
+  textSize(11);
+  textAlign(RIGHT, BOTTOM);
+  fill(120, 120, 140, 180);
+  noStroke();
+  text("Made with ♥ by Aibike Moldobaeva", width - 15, height - 10);
+  pop();
+}
+
+class FireSpot {
+  constructor(x,y,r) {
+    this.x = x; this.y = y; this.baseR = r;
+    this.created = millis();
+  }
+  get radius() {
+    let t = (millis() - this.created)/1000 * FIRE_PULSE_SPEED + random(1000);
+    return this.baseR * (0.94 + 0.10 * sin(t * 1.81));
+  }
+  draw(glowFactor=1.0) {
+    push();
+    translate(this.x, this.y);
+    noStroke();
+    let glowR = this.radius * 2.2 * glowFactor;
+    for (let i=8;i>=1;i--) {
+      let a = map(i, 8, 1, 18, 110)*glowFactor;
+      fill(COLOR_FIRE_GLOW[0], COLOR_FIRE_GLOW[1], COLOR_FIRE_GLOW[2], a);
+      ellipse(0,0, glowR * (0.77 + i*0.04), glowR * (0.77 + i*0.04));
+    }
+    fill(COLOR_FIRE_CORE[0], COLOR_FIRE_CORE[1], COLOR_FIRE_CORE[2], 230*glowFactor);
+    ellipse(0,0,this.radius*1.18,this.radius*1.18);
+    pop();
+  }
+}
+
+class FadeParticle {
+  constructor(x,y,r0) {
+    this.x = x + random(-12,12);
+    this.y = y + random(-12,12);
+    this.r = r0 * random(0.9,1.13);
+    this.birth = millis();
+    this.lifetime = FIRE_FADE_DURATION;
+    this.tilt = random(TWO_PI);
+    this.drift = random(-2,2);
+    this.col = [ random(150,255), random(140,200), random(80,145), 140 + random(-40,40) ];
+  }
+  draw() {
+    let t = constrain((millis()-this.birth)/this.lifetime, 0, 1);
+    push();
+    translate(this.x, this.y + this.drift*t*18);
+    rotate(this.tilt + t*2.6);
+    noStroke();
+    fill(this.col[0], this.col[1], this.col[2], this.col[3]*(1.0-t));
+    ellipse(0,0, this.r*(1.0+0.35*t), this.r*(0.6+1.25*t));
+    pop();
+  }
+  expired() { return millis() > this.birth + this.lifetime; }
+}
+
+function spawnFireIfDue() {
+  let now = millis();
+  if (now - lastSpawnTime > spawnInterval) {
+    spawnOneFire();
+    lastSpawnTime = now;
+    spawnInterval = max(MIN_SPAWN_INTERVAL, spawnInterval * SPAWN_ACCELERATION);
+  }
+}
+
+function spawnOneFire() {
+  let margin = min(width,height) * 0.12;
+  let tryCount = 0, maxTries = 12;
+  let pos;
+  do {
+    pos = { x: random(margin, width-margin), y: random(margin+50, height-margin) };
+    tryCount++;
+  } while (tryCount < maxTries && isOverlappingOtherFire(pos.x,pos.y));
+  let scaledR = map(width, 600, 1400, INITIAL_FIRE_RADIUS, INITIAL_FIRE_RADIUS*1.4);
+  scaledR = constrain(scaledR, MIN_FIRE_RADIUS, INITIAL_FIRE_RADIUS*2);
+  fires.push(new FireSpot(pos.x,pos.y,scaledR));
+}
+
+function isOverlappingOtherFire(x,y) {
+  for (let f of fires) if (dist(x,y,f.x,f.y) < f.baseR*2.18) return true;
+  return false;
+}
+
+function drawFires(interactive=true) {
+  for (let f of fires) {
+    let hovered = interactive && dist(mouseX, mouseY, f.x, f.y) < f.radius;
+    f.draw(hovered?1.18:1.0);
+    if (hovered && interactive) {
+      noFill();
+      stroke(252,240,80,190); strokeWeight(3.5);
+      ellipse(f.x,f.y,f.radius*1.32,f.radius*1.32);
+      noStroke();
+    }
+  }
+}
+
+function updateFireFadeFX() {
+  for (let i=fireFadeParticles.length-1;i>=0;i--) if (fireFadeParticles[i].expired()) fireFadeParticles.splice(i,1);
+}
+function drawFireFadeFX() { for (let p of fireFadeParticles) p.draw(); }
+
+function updateEcosystem() {
+  let elapsed = deltaTime / 1000;
+  let healthLoss = fires.length * HEALTH_LOSS_PER_FIRE_PER_SEC * elapsed;
+  let airLoss = fires.length * AIR_QUALITY_LOSS_PER_FIRE_PER_SEC * elapsed;
+  ecosystemHealth = max(0, ecosystemHealth - healthLoss);
+  airQuality = max(0, airQuality - airLoss);
+  if (ecosystemHealth <= 0 || airQuality <= 0) triggerGameOver();
+}
+
+function triggerGameOver() {
+  if (gameState !== "gameover") {
+    gameState = "gameover";
+  }
+}
+
+function mousePressed() {
+  mouseClickedThisFrame = true;
+  
+  if (gameState === "start") {
+    let btnW = min(width * 0.3, 280);
+    let btnH = min(height * 0.08, 60);
+    let btnX = width/2 - btnW/2;
+    let btnY = height * 0.65;
+    
+    if (mouseX >= btnX && mouseX <= btnX + btnW && 
+        mouseY >= btnY && mouseY <= btnY + btnH) {
+      gameState = "playing";
+      initGame();
+    }
+  } else if (gameState === "playing") {
+    for (let i=fires.length-1;i>=0;i--) {
+      let f = fires[i];
+      if (dist(mouseX,mouseY,f.x,f.y) < f.radius) {
+        score++;
+        for (let k=0;k<15;k++) fireFadeParticles.push(new FadeParticle(f.x,f.y,f.radius));
+        fires.splice(i,1);
+        ecosystemHealth = min(MAX_ECOSYSTEM_HEALTH, ecosystemHealth + HEALTH_RESTORE_ON_EXTINGUISH);
+        airQuality = min(MAX_AIR_QUALITY, airQuality + AIR_QUALITY_RESTORE_ON_EXTINGUISH);
+        break;
+      }
+    }
+  } else if (gameState === "gameover" && !resizedThisFrame) {
+    queueRestart();
+  }
+}
+
+function queueRestart() {
+  if (!restartQueued) {
+    restartQueued = true;
+    setTimeout(()=>{ gameState = "start"; initGame(); }, 210);
+  }
+}
+
+function keyPressed() {
+  if (gameState === "gameover" || gameState === "start") {
+    if (!resizedThisFrame) queueRestart();
+  }
+}
+
+function drawStatusBars(grayOut=false) {
+  let barW = STATUS_BAR_WIDTH_FRAC * width;
+  let barH = STATUS_BAR_THICKNESS_FRAC * height;
+  let pad = STATUS_BAR_SPACING_FRAC * height;
+  let x = (width - barW)/2;
+  let y = pad*1.6;
+
+  let healthVal = constrain(ecosystemHealth,0,MAX_ECOSYSTEM_HEALTH);
+  let healthFr = healthVal / MAX_ECOSYSTEM_HEALTH;
+  let healthCol = lerpColor(color(...COLOR_HEALTH_CRIT), color(...COLOR_HEALTH), pow(healthFr,1.1));
+  if (grayOut) healthCol = lerpColor(color(130), healthCol, 0.34);
+
+  fill(33,42,42,80); noStroke(); rect(x,y,barW,barH,STATUS_BAR_CORNER_RADIUS);
+  fill(healthCol); noStroke(); rect(x,y,barW*healthFr,barH,STATUS_BAR_CORNER_RADIUS);
+  drawShadowedText("Ecosystem Health", x+8, y+barH/2, FONT_BODY, 18, LEFT, CENTER, 0.62);
+  drawShadowedText(healthVal.toFixed(1), x+barW-22, y+barH/2, FONT_BODY, 18, RIGHT, CENTER, 0.73);
+
+  let airVal = constrain(airQuality,0,MAX_AIR_QUALITY);
+  let airFr = airVal / MAX_AIR_QUALITY;
+  let airCol = lerpColor(color(...COLOR_AIR_CRIT), color(...COLOR_AIR), pow(airFr,1.07));
+  if (grayOut) airCol = lerpColor(color(120), airCol, 0.32);
+
+  let y2 = y + barH + pad*1.5;
+  fill(27,34,62,86); rect(x,y2,barW,barH,STATUS_BAR_CORNER_RADIUS);
+  fill(airCol); noStroke(); rect(x,y2,barW*airFr,barH,STATUS_BAR_CORNER_RADIUS);
+  drawShadowedText("Air Quality", x+8, y2+barH/2, FONT_BODY, 18, LEFT, CENTER, 0.60);
+  drawShadowedText(airVal.toFixed(1), x+barW-22, y2+barH/2, FONT_BODY, 18, RIGHT, CENTER, 0.75);
+}
+
+function drawScoreHUD() {
+  let s = score;
+  let barY = STATUS_BAR_SPACING_FRAC * height;
+  drawShadowedText("Fires Extinguished: " + s, width-18, barY, FONT_BODY, 19, RIGHT, TOP, 0.78);
+}
+
+function drawShadowedText(str,x,y,font,size,hAlign=LEFT,vAlign=BASELINE,shadowAlpha=0.75) {
+  textFont(font); textSize(size); textAlign(hAlign,vAlign);
+  fill(COLOR_UI_SHADOW[0], COLOR_UI_SHADOW[1], COLOR_UI_SHADOW[2], COLOR_UI_SHADOW[3]*shadowAlpha);
+  text(str, x+2.5, y+2.5);
+  fill(...COLOR_UI_TEXT);
+  text(str, x, y);
+}
+
+function drawGameOverScreen() {
+  let panelW = min(520, width*0.92), panelH = min(340, height*0.56);
+  let x = width/2 - panelW/2, y = height/2 - panelH/2;
+  fill(...COLOR_GAME_OVER_BG); noStroke(); rect(x,y,panelW,panelH,24);
+  
+  textFont(FONT_TITLE); textSize(48); textAlign(CENTER, TOP);
+  fill(255,255,255,242); 
+  noStroke();
+  text("Game Over", width/2, y+32);
+  
+  textFont(FONT_BODY); textSize(26); fill(246); 
+  text("Fires extinguished: " + score, width/2, y+100);
+  
+  let timeSurv = millis() - timeStarted; let tStr = (timeSurv>0)?formatTime(timeSurv):"--:--";
+  fill(208); textSize(22); 
+  text("You survived: " + tStr, width/2, y+140);
+  
+  let btnW=180, btnH=50, btnX = width/2-btnW/2, btnY = y+panelH-120;
+  fill(...COLOR_BTN,220); stroke(80,139,175,165); strokeWeight(2.5); 
+  rect(btnX,btnY,btnW,btnH,16);
+  
+  fill(...COLOR_BTN_TEXT); noStroke(); textFont(FONT_BODY); textSize(22); 
+  textAlign(CENTER, CENTER);
+  text("Main Menu", width/2, btnY+btnH/2);
+  
+  fill(...COLOR_UI_TEXT); textSize(14); 
+  textAlign(CENTER, TOP);
+  text("Click or Press any key to return to menu", width/2, btnY+btnH+15);
+  
+  if ( mouseX >= btnX && mouseX <= btnX+btnW && mouseY >= btnY && mouseY <= btnY+btnH && mouseClickedThisFrame && !restartQueued ) {
+    queueRestart();
+  }
+}
+
+function formatTime(ms){ let t = int(ms/1000); let m = floor(t/60), s = t%60; return nf(m,2)+":"+nf(s,2); }
+</script>
+
+</body>
+</html>
