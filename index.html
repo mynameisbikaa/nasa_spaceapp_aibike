@@ -9,11 +9,137 @@
   <style>
     html, body { margin:0; padding:0; overflow:hidden; background:#101018; }
     canvas { display:block; }
+    
+    /* VIDEO OVERLAY STYLES - ADD THIS */
+    #intro-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.92);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .video-container {
+      position: relative;
+      width: 640px;
+      max-width: 85%;
+      background: black;
+      border-radius: 12px;
+      box-shadow: 0 15px 60px rgba(0, 0, 0, 0.7);
+    }
+    
+    #intro-video {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+    }
+    
+    #skip-btn {
+      margin-top: 25px;
+      padding: 14px 35px;
+      background: rgba(100, 100, 100, 0.4);
+      border: 2px solid rgba(150, 150, 150, 0.4);
+      color: #888;
+      cursor: not-allowed;
+      font-size: 16px;
+      font-family: 'Montserrat', sans-serif;
+      border-radius: 8px;
+      transition: all 0.3s;
+      letter-spacing: 1px;
+    }
+    
+    #skip-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-color: white;
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    #skip-btn.active:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+    }
+    
+    .hidden {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
 
+<!-- VIDEO INTRO OVERLAY - ADD THIS SECTION -->
+<div id="intro-overlay">
+  <div class="video-container">
+    <video id="intro-video" autoplay muted playsinline>
+      <source src="Aibike_spaceappchallenge_2 (1).mp4" type="video/mp4">
+    </video>
+  </div>
+  <button id="skip-btn" disabled>
+    <span id="timer-text">Wait 10s...</span>
+  </button>
+</div>
+
 <script>
+// VIDEO OVERLAY SCRIPT - ADD THIS BEFORE YOUR GAME SCRIPT
+(function() {
+  const overlay = document.getElementById('intro-overlay');
+  const video = document.getElementById('intro-video');
+  const skipBtn = document.getElementById('skip-btn');
+  const timerText = document.getElementById('timer-text');
+  
+  let countdown = 10;
+  let canSkip = false;
+  
+  const timer = setInterval(() => {
+    countdown--;
+    timerText.textContent = `Wait ${countdown}s...`;
+    
+    if (countdown <= 0) {
+      clearInterval(timer);
+      enableSkip();
+    }
+  }, 1000);
+  
+  function enableSkip() {
+    canSkip = true;
+    skipBtn.disabled = false;
+    skipBtn.classList.add('active');
+    timerText.textContent = 'Continue to Game →';
+  }
+  
+  skipBtn.addEventListener('click', () => {
+    if (canSkip) {
+      startGame();
+    }
+  });
+  
+  video.addEventListener('ended', () => {
+    startGame();
+  });
+  
+  function startGame() {
+    overlay.classList.add('hidden');
+    video.pause();
+  }
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && canSkip) {
+      startGame();
+    }
+  });
+})();
+</script>
+
+<script>
+// YOUR EXISTING GAME CODE STAYS EXACTLY THE SAME
 const BACKGROUND_IMAGE_URL = "snapshot-2020-08-03T00_00_00Z.jpg";
 
 const INITIAL_SPAWN_INTERVAL = 1200;
@@ -269,7 +395,6 @@ function drawRoulette() {
 }
 
 function updateFactPopup() {
-  // Show fact every 7 seconds
   let currentTime = millis();
   if (currentTime - lastFactTime > 7000) {
     lastFactTime = currentTime;
@@ -278,7 +403,6 @@ function updateFactPopup() {
     factPopupTime = currentTime;
   }
   
-  // Hide fact after 5 seconds
   if (currentFactPopup && millis() - factPopupTime > 5000) {
     currentFactPopup = null;
   }
@@ -289,7 +413,6 @@ function drawFactPopup() {
   
   push();
   
-  // Fade in/out timing
   let elapsed = millis() - factPopupTime;
   let alpha = 255;
   if (elapsed < 300) {
@@ -298,7 +421,6 @@ function drawFactPopup() {
     alpha = map(elapsed, 4700, 5000, 255, 0);
   }
   
-  // Fact panel - smaller and more transparent
   let w = min(width * 0.5, 500);
   let h = 160;
   let x = width/2 - w/2;
@@ -571,16 +693,10 @@ function drawGameOverScreen() {
     queueRestart();
   }
 }
-
-function formatTime(ms){ let t = int(ms/1000); let m = floor(t/60), s = t%60; return nf(m,2)+":"+nf(s,2); }
+  function formatTime(ms){ let t = int(ms/1000); let m = floor(t/60), s = t%60; return nf(m,2)+":"+nf(s,2); }
 </script>
 
 </body>
 </html>
 
-
-
-
-
-
-
+function formatTime
