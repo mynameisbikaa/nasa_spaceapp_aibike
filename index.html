@@ -202,24 +202,12 @@ function drawStartScreen() {
   if (nasaLogo) {
     imageMode(CENTER);
     image(nasaLogo, width/2 - logoSize * 1.2, logoY + logoSize/2, logoSize, logoSize);
-  } else {
-    noFill();
-    stroke(100, 120, 150);
-    strokeWeight(2);
-    rectMode(CENTER);
-    rect(width/2 - logoSize * 1.2, logoY + logoSize/2, logoSize, logoSize, 5);
-  }
+  } 
   
   if (spaceAppsLogo) {
     imageMode(CENTER);
     image(spaceAppsLogo, width/2 + logoSize * 1.2, logoY + logoSize/2, logoSize * 2, logoSize * 1.3);
-  } else {
-    noFill();
-    stroke(100, 120, 150);
-    strokeWeight(2);
-    rectMode(CENTER);
-    rect(width/2 + logoSize * 1.2, logoY + logoSize/2, logoSize * 2, logoSize * 1.3, 5);
-  }
+  } 
   
   rectMode(CORNER);
   
@@ -604,6 +592,7 @@ function formatTime(ms){ let t = int(ms/1000); let m = floor(t/60), s = t%60; re
 
 </body>
 </html>
+
 
 
 
