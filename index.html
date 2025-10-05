@@ -16,9 +16,9 @@
 <script>
 const BACKGROUND_IMAGE_URL = "snapshot-2020-08-03T00_00_00Z.jpg";
 
-const INITIAL_SPAWN_INTERVAL = 1800;
-const MIN_SPAWN_INTERVAL = 500;
-const SPAWN_ACCELERATION = 0.975;
+const INITIAL_SPAWN_INTERVAL = 1200;
+const MIN_SPAWN_INTERVAL = 300;
+const SPAWN_ACCELERATION = 0.95;
 const INITIAL_FIRE_RADIUS = 48;
 const MIN_FIRE_RADIUS = 24;
 const FIRE_PULSE_SPEED = 1.1;
@@ -604,6 +604,7 @@ function formatTime(ms){ let t = int(ms/1000); let m = floor(t/60), s = t%60; re
 
 </body>
 </html>
+
 
 
 
